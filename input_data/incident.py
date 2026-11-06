@@ -20,6 +20,7 @@ class Incident:
     time_required: float
 
     def __post_init__(self) -> None:
+        """Controleer de tijdsvoorwaarden van het incident."""
         if self.deadline < self.timestamp:
             raise ValueError(f"Incident {self.incident_id} deadline precedes its timestamp")
         if self.time_required < 0:

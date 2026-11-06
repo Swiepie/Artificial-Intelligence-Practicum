@@ -14,6 +14,7 @@ class Road:
 
     @property
     def normal_travel_time(self) -> float:
+        """Bereken de reistijd zonder congestie of verkeerscorrectie."""
         if self.speed <= 0:
             raise ValueError(f"Road speed must be positive: {self}")
         return self.distance / self.speed
@@ -54,6 +55,7 @@ class RoadProbabilities:
     ]
 
     def __post_init__(self) -> None:
+        """Maak de prioriteitsverdeling alleen-lezen aan de buitenkant."""
         object.__setattr__(
             self, "weather_prior", MappingProxyType(dict(self.weather_prior))
         )

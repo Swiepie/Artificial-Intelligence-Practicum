@@ -18,6 +18,7 @@ class ScenarioData:
     traffic_probabilities: TrafficProbabilities
 
     def incidents_at(self, timestamp: float) -> tuple[Incident, ...]:
+        """Geef incidenten terug die exact op dit tijdstip bekend worden."""
         return tuple(
             incident
             for incident in self.incidents
@@ -25,6 +26,7 @@ class ScenarioData:
         )
 
     def pending_incidents(self, timestamp: float) -> tuple[Incident, ...]:
+        """Geef alle incidenten terug die uiterlijk nu bekend zijn."""
         return tuple(
             incident
             for incident in self.incidents

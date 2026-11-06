@@ -1,0 +1,312 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[dutch]{babel}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\setlist{itemsep=2pt,topsep=4pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\title{Noodhulpsysteem --- Algoritmeplan\\[2pt]\large Welke techniek voor welk onderdeel (enkel cursusstof, geen code)}
+\author{AI Practicum \\ Deadline 12/11/2026 om 23:59}
+\date{}
+
+\begin{document}
+\maketitle
+
+%--------------------------------------------------------------
+\section{Overzicht: \'e\'en pijplijn, vier technieken}
+Het systeem is een simulatielus: het gaat stap voor stap door de tijd, onthult incidenten pas wanneer hun tijdstip bereikt is en gebruikt nooit toekomstige informatie. Elke van de vier verplichte technieken beantwoordt \'e\'en vraag in die lus.
+
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}p{3.6cm} Y@{}}
+\toprule
+Vraag & Techniek & Uitvoer \\
+\midrule
+Hoe waarschijnlijk is elke weg Open/Congested/Blocked? & Bayesiaanse redenering (exacte enumeratie) & $P(\text{status}\mid \text{weer},\text{meldingen})$ per gerichte weg \\
+Hoe zwaar is het verkeer nu op een weg? & Hidden Markov Model (forward filtering) & Belief over Low/Medium/High per weg \\
+Hoe lang duurt een route en welke is het best? & Zoeken: A* (UCS als testorakel) & Pad en verwachte reistijd \\
+Welke hulpverlener behandelt welk incident, en wanneer? & Constraint Satisfaction Problem (CSP) & Toewijzingen voor \texttt{plan.json} \\
+\bottomrule
+\end{tabularx}
+
+\bigskip
+\noindent\textbf{Lus per beslissingstijdstip $t$:}
+\begin{enumerate}
+  \item onthul nieuwe incidenten en update de beschikbaarheid van hulpverleners;
+  \item update de wegbeliefs (Bayes) en de verkeersbeliefs (HMM);
+  \item zet de beliefs om in kosten per verbinding;
+  \item bereken reistijden met zoeken (A*);
+  \item wijs hulpverleners toe met harde voorwaarden en een doelfunctie (CSP);
+  \item log de toewijzingen en update locaties en vrije tijdstippen van hulpverleners;
+  \item schrijf op het einde \texttt{plan.json} en \texttt{statistics.txt}.
+\end{enumerate}
+
+%--------------------------------------------------------------
+\section{Wat Scenario 1 ons leert}
+De aangeleverde bestanden geven concrete feiten die de keuzes sturen (goed materiaal voor rapport en verdediging).
+
+\begin{itemize}
+  \item \textbf{Kleine graaf:} 5 knopen (N1--N4, H1), 14 gerichte wegen, 4 hulpverleners, 7 incidenten. Exacte methoden zijn triviaal snel. De keuze van algoritme gaat dus over uitlegbaarheid en correctheid, niet over snelheid. Verborgen scenario's kunnen groter zijn, dus de code moet schaalbaar blijven.
+  \item \textbf{Reistijd} $=$ afstand/snelheid (aanname: zelfde tijdseenheid als de deadlines). Voorbeelden: H1--N4: $340/30\approx 11{,}3$; H1--N2: $721/15\approx 48{,}1$; N1--N2: $775/15\approx 51{,}7$; N3--N4: $774/15\approx 51{,}6$.
+  \item \textbf{Wegen en meldingen zijn gericht:} N1$\to$N2 en N2$\to$N1 hebben verschillende meldingen. Na toepassing van Bayes met de gegeven tabellen:
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Weg & $P(\text{Open})$ & $P(\text{Congested})$ & $P(\text{Blocked})$ \\
+\midrule
+H1$\leftrightarrow$N3 (Storm, alle bronnen ``Blocked'') & 0,000 & 0,002 & 0,998 \\
+N1$\to$N2 (Rain, gemengde meldingen) & 0,014 & 0,459 & 0,527 \\
+N2$\to$N4 (Rain, gemengde meldingen) & 0,014 & 0,459 & 0,527 \\
+N2$\to$N1, N4$\to$N2 (Rain, alle ``Congested'') & 0,006 & 0,993 & 0,001 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{Wegen zonder meldingen} (bv.\ H1--N1, H1--N2, H1--N4, N3$\to$N4) vallen terug op $P(\text{status}\mid \text{weer})$. Het weer voor die wegen volgt niet uit een meldingsrij; dit is een aanname om te documenteren.
+  \item \textbf{Dubbelzinnige wegen:} N1$\to$N2 en N2$\to$N4 zijn ongeveer 53\% blocked tegenover 46\% congested. De meest waarschijnlijke toestand nemen zou ze ``blocked'' noemen en een kans van 46\% op bruikbaarheid negeren. Dit is een echt beslissingsprobleem (zie Sectie~\ref{sec:bayes}).
+  \item \textbf{N3 is bijna afgesneden:} H1$\leftrightarrow$N3 is nagenoeg zeker geblokkeerd, dus incident I3 (Evacuatie bij N3, deadline 150) is enkel bereikbaar via N4$\to$N3. In Scenario~1 is de enige evacuatiebekwame hulpverlener politie-eenheid R3 (start in N2); dat is een eigenschap van \texttt{responders.csv} van dat scenario. Kandidaatroute N2$\to$H1$\to$N4$\to$N3:
+  \[
+    48{,}1 + 11{,}3 + 51{,}6 \approx 111 \le 150 ,
+  \]
+  dus binnen de deadline, terwijl N2$\to$N4$\to$N3 afhangt van de dubbelzinnige weg N2$\to$N4.
+  \item \textbf{Capaciteitsknelpunt:} I1 (Medisch), I4 (EHBO), I6 (EHBO) vereisen alle drie een ambulance, maar enkel R2 (beschikbaar) en R4 (bezet tot $t=10$, in N3) bestaan. Dit is een echt planningsconflict en de reden waarom een pure ``dichtstbijzijnde hulpverlener''-regel riskant is.
+  \item \textbf{Gelijktijdige en gespreide aankomsten:} vier incidenten verschijnen op $t=0$, twee op $t=50$, \'e\'en op $t=60$. Beslissingen op $t=0$ moeten gezamenlijk (als batch) genomen worden, niet \'e\'en incident per keer.
+  \item \textbf{HMM-data:} \texttt{observed\_traffic.csv} heeft 10 observaties voor elk van 12 gerichte wegen en \texttt{traffic\_probabilities.json} geeft \'e\'en gedeeld begin-/transitie-/emissiemodel. Het HMM is dus per weg, met gedeelde parameters.
+\end{itemize}
+
+%--------------------------------------------------------------
+\section{Controle met Scenario 3}
+Scenario 3 is een veel grotere instantie. De aanbevolen technieken blijven gelden, maar enkele uitspraken uit Scenario~1 waren te specifiek en sommige prioriteiten verschuiven.
+
+\subsection{Wat verschilt}
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.8cm} Y Y@{}}
+\toprule
+ & Scenario 1 & Scenario 3 \\
+\midrule
+Graaf & 5 knopen, 14 gerichte wegen & 26 knopen (20 normaal, 2 ziekenhuizen, 2 politie, 2 brandweer), 60 gerichte wegen (30 symmetrische paren) \\
+Hulpverleners / incidenten & 4 / 7 & 10 / 20 \\
+Tijdstippen incidenten & $t=0$ tot 60 & $t=0$ tot 5000, deadlines tot 7500 \\
+Reistijd per verbinding & ongeveer 10--50 & ongeveer 100--1000 (afstanden 2979--15191) \\
+Weer in meldingen & Rain en Storm & enkel Rain (alle 42 meldingsrijen) \\
+Wegen met meldingen & de meeste & 14 van 60 gerichte wegen \\
+Wegen met verkeersobservaties & 12 gerichte wegen & 10 gerichte wegen (enkel \'e\'en richting) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Conclusies die blijven gelden}
+\begin{itemize}
+  \item Bayes via exacte enumeratie, HMM forward filtering, A* en een CSP-toewijzing blijven de juiste keuzes. De graaf is groter maar nog steeds klein voor exacte methoden.
+  \item \textbf{De A*-heuristiek is toelaatbaar:} in beide scenario's is elke afstand van een verbinding minstens de Euclidische afstand tussen de knopen (verhouding 1,02--1,38 in S1, 1,12--1,38 in S3) en de co\"ordinaten delen de eenheid van de afstanden. Euclidische afstand gedeeld door de maximale snelheid (30) overschat dus nooit (relaxed-problem-heuristiek). Test A* nog steeds tegen UCS.
+  \item Gebruik verwachte kost, niet enkel de meest waarschijnlijke toestand: in S3 is de dubbelzinnigheid vooral Open versus Congested, dus de keuze weegt nog zwaarder.
+  \item Online herplannen op gebeurtenistijdstippen is vereist.
+\end{itemize}
+
+\subsection{Conclusies die gecorrigeerd of veralgemeend moeten worden}
+\begin{enumerate}
+  \item \textbf{Hardcode nooit capaciteiten op basis van het type hulpverlener.} De opdrachttekst zegt dat politie-eenheden Evacuatie kunnen doen, maar in S3 hebben de politie-eenheden enkel Verkeerscontrole, Beveiliging en Wetshandhaving. Evacuatie-incidenten (I8, I17) kunnen daar enkel door de brandweerwagens (R5, R7, R8). Medisch kan enkel R1 en R3 (R2 en R4 niet), Pompwerken enkel R6 en R8, Brandbestrijding enkel R5 en R7. Lees capaciteiten voor elk scenario uit \texttt{responders.csv}.
+  \item \textbf{Het knelpunt is gespecialiseerde capaciteit en tijd, geen simpele telling.} In S1 was het ``drie ambulance-opdrachten, twee ambulances op $t=0$''. In S3 verschijnen op $t=0$ slechts vijf incidenten met elk een andere beste hulpverlener, maar later ontstaan conflicten: R5 is de beste Rescue-eenheid voor I3, I6 en I10 \'en de enige nabije Evacuatie-eenheid voor I8 en I17; R1 en R3 zijn de enige medische eenheden voor I1, I11, I14 en I20. De toewijzing moet dus reeksen van opdrachten per hulpverlener aankunnen (locatie en vrij tijdstip na elke opdracht), niet enkel \'e\'en batch op $t=0$.
+  \item \textbf{De dubbelzinnigheid verschuift van Blocked naar Open/Congested.} In S3 is enkel N5$\leftrightarrow$N16 waarschijnlijk geblokkeerd (ongeveer 53\% Blocked, 46\% Congested). Voorbeelden:
+\end{enumerate}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Weg (Rain) & $P(\text{Open})$ & $P(\text{Congested})$ & $P(\text{Blocked})$ \\
+\midrule
+H1$\to$N8, H2$\to$N7, N8$\to$H1, N17$\to$N9, N9$\to$N17 & 0,06 & 0,94 & 0,00 \\
+H1$\to$N9, H2$\to$N13, N9$\to$H1, N13$\to$H2 & 0,49 & 0,51 & 0,00 \\
+N5$\to$N3, N3$\to$N5 & 0,30 & 0,70 & 0,00 \\
+N7$\to$H2 & 0,81 & 0,19 & 0,00 \\
+N5$\leftrightarrow$N16 & 0,01 & 0,46 & 0,53 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Richtingen kunnen verschillen: H2$\to$N7 is 94\% Congested terwijl N7$\to$H2 voor 81\% Open is. Houd beliefs dus per gerichte weg bij. Een ``Blocked-straf'' of drempel be\"invloedt hier enkel N5$\leftrightarrow$N16; de Congested-multiplicator (1,5) bepaalt het plan.
+
+\begin{enumerate}[resume]
+  \item \textbf{Meest waarschijnlijke toestand versus verwachte kost kan de haalbaarheid van een deadline doen omslaan.} Incident I4 (EHBO bij N8, deadline 600, bekend op $t=0$) wordt vanuit H1 bediend door R1 of R2. De basistijd is ongeveer 402.
+  \begin{itemize}
+    \item Als H1$\to$N8 Congested is (94\% kans): $402\times 1{,}5 = 603 > 600$, dus de deadline wordt met ongeveer 3 gemist.
+    \item Met de verwachte multiplicator (zonder Blocked-kans, want $P(\text{Blocked})=0$):
+    \[
+      0{,}06\cdot 1 + 0{,}94\cdot 1{,}5 = 0{,}06 + 1{,}41 = 1{,}47,
+      \qquad 402\times 1{,}47 \approx 591 \le 600 ,
+    \]
+    wat haalbaar lijkt.
+  \end{itemize}
+  Beslis expliciet of het systeem plant op verwachte tijd of op een veilige (pessimistische) tijd, en rapporteer hoe die keuze de deadline-statistiek verandert.
+  \item \textbf{Wegen zonder meldingen vormen de meerderheid (46 van 60 gerichte wegen).} De indicatieve reistijden hierboven veronderstellen dat die wegen Open zijn, wat optimistisch is: onder de Rain-prior is $P(\text{Open}\mid\text{Rain})=0{,}6$, dus zo'n weg is met kans $0{,}4$ Congested of Blocked. Sommige deadlines hebben weinig speling, bv.\ I5 (Pompwerken bij N5, deadline 1350): enkel R8 haalt het, met nominale tijd ongeveer 1304 (speling ongeveer 46). I3 (Rescue bij N17, deadline 1550) is nominaal haalbaar (ongeveer 1197 vanuit R5) maar ongeveer 1846 zodra gemelde congestie en de waarschijnlijk geblokkeerde N5--N16 meegerekend worden. Verwacht dus gemiste deadlines en onbehandelde incidenten, en plan om dit uit te leggen in plaats van te verbergen.
+  \item \textbf{Weer is \'e\'en waarde (Rain) in S3,} maar verschilt per meldingsrij in S1 (Rain en Storm). Beslis hoe weer gedefinieerd wordt voor wegen zonder meldingen: een globaal huidig weer (de opdrachttekst zegt dat het bekend is) is de meest consistente lezing.
+  \item \textbf{Het HMM dekt weinig wegen en weinig tijdstappen.} Enkel 10 gerichte wegen hebben 10 observaties, terwijl de simulatie 5000 tijdseenheden beslaat in S3 (en ongeveer 200 in S1). De afbeelding van observatie-index naar simulatietijd is niet gegeven. Aannames om te documenteren: (a) de reeks is de geschiedenis tot ``nu'' en wordt daarna voorspeld met de transitiematrix, of de observaties worden over de horizon uitgespreid; (b) wegen zonder observaties gebruiken de initi\"ele of stationaire verdeling; (c) of de tegengestelde richting dezelfde HMM-belief deelt.
+  \item \textbf{Doodlopende knopen zijn single points of failure.} N1, N10, N11, N13, N15, N18, F1 en F2 hebben elk slechts \'e\'en verbindende weg. N1 en N10 zijn incidentlocaties (I1 en I18; I6 en I15), dus \'e\'en geblokkeerde of congested weg bepaalt of ze bereikbaar zijn. Van die wegen heeft enkel die naar N13 meldingen. De zoekfunctie moet ``onbereikbaar'' netjes teruggeven.
+  \item \textbf{Tijdseenheid.} Met reistijden van honderden tot duizenden in S3 is de eenheid waarschijnlijk seconden (de voorbeeldstatistieken vermelden ``s''), maar dit blijft een aanname om te vermelden in \texttt{statistics.txt} en het rapport.
+\end{enumerate}
+
+\subsection{Bijgewerkte aanbeveling}
+Behoud de combinatie uit Sectie~\ref{sec:combo} met deze aanpassingen:
+\begin{enumerate}
+  \item hou per hulpverlener een toestand bij (locatie, vrij tijdstip) en laat meerdere opdrachten per hulpverlener over de tijd toe;
+  \item vergelijk greedy, een CSP-optimalisatie per batch, en een pessimistische versus verwachte kostvariant, met S1 als unit-testcase en S3 als hoofdevaluatie;
+  \item test de plan-validator op beide scenario's;
+  \item behandel onbehandelde en te late incidenten als volwaardige resultaten in de statistieken.
+\end{enumerate}
+
+%--------------------------------------------------------------
+\section{Beste algoritme per component}
+
+\subsection{Bayesiaanse redenering (wegconditie)}\label{sec:bayes}
+\textbf{Model:} Weer $\to$ Status $\to$ \{Burger-, Politie-, Sensormelding\} (naive-Bayes-structuur: meldingen voorwaardelijk onafhankelijk gegeven de status).
+\[
+  P(S\mid W, r_c, r_p, r_s) \;\propto\; P(S\mid W)\,P(r_c\mid S)\,P(r_p\mid S)\,P(r_s\mid S).
+\]
+Normaliseer door de drie ongenormaliseerde waarden ($S\in\{\text{Open},\text{Congested},\text{Blocked}\}$) te delen door hun som.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} Y Y@{}}
+\toprule
+Optie & Voordelen & Nadelen \\
+\midrule
+\textbf{Exacte enumeratie (aanbevolen)} & Slechts 3 toestanden, dus exact en onmiddellijk. Met de hand te controleren. Makkelijk uit te leggen bij de verdediging. & Veronderstelt onafhankelijke meldingen gegeven de status en onafhankelijke wegen. \\
+Sampling (likelihood weighting) & Werkt voor elk netwerk. & Ruis, zinloos voor zo'n kleine tabellen. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent\textbf{Aanbeveling:} exacte enumeratie. Als er enkel een weerwaarde per melding gegeven is, gebruik die als evidence; ontbreekt ze, marginaliseer over $P(\text{Weer})$.
+
+\medskip
+\noindent\textbf{Gebruik van de posterior (ontwerpbeslissing om te verdedigen):}
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} Y Y@{}}
+\toprule
+Strategie & Voordelen & Nadelen \\
+\midrule
+Meest waarschijnlijke toestand (MAP) & Eenvoudig. & Negeert risico, beslissing klapt om bij 50/50 (zoals N1$\to$N2). \\
+\textbf{Verwachte reistijd met Blocked als grote straf} & Gebruikt de volledige verdeling, behandelt dubbelzinnigheid vloeiend. & Strafwaarde is een af te stellen aanname. \\
+Drempel: weg uitsluiten als $P(\text{Blocked})>\theta$ & Veilig, makkelijk uit te leggen. & $\theta$ is arbitrair en kan de enige route weggooien. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent\textbf{Aanbeveling:} kost van een verbinding
+\[
+  c_e \;=\; t_e\cdot\bigl(P_{\text{open}}\cdot 1 + P_{\text{cong}}\cdot 1{,}5\bigr) \;+\; \lambda\, P_{\text{blocked}},
+\]
+met $t_e$ de basisreistijd en $\lambda$ een risicostraf (of sluit verbindingen boven een drempel uit). Verantwoord de keuze en test de gevoeligheid ervoor.
+
+\subsection{Hidden Markov Model (verkeer)}
+\textbf{Model:} verborgen toestand $\in\{\text{Low},\text{Medium},\text{High}\}$ per weg, met de gegeven begin-, transitie- en emissiematrices. De observaties in \texttt{observed\_traffic.csv} zijn de evidence.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} Y Y@{}}
+\toprule
+Optie & Voordelen & Nadelen \\
+\midrule
+\textbf{Forward algoritme (filtering) + voorspelling (aanbevolen)} & Geeft $P(\text{toestand}_t\mid \text{obs}_{1:t})$, dus respecteert ``geen kennis van de toekomst''. Voorspel vooruit met de transitiematrix voor het verkeer tijdens de rit. & Vraagt een duidelijke afbeelding van observatie-index naar simulatietijd. \\
+Viterbi (meest waarschijnlijke reeks) & Klassiek, goed om te tonen. & Geeft een volledige verleden reeks, geen huidige belief; past minder bij de online setting. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent\textbf{Aanbeveling:} forward filtering per weg, daarna \'e\'en-staps voorspelling. Gebruik Viterbi enkel als extra analyse of sanity check.
+
+\medskip
+\noindent\textbf{Open ontwerpvraag om te documenteren:} hoe het verkeersniveau de reistijd beïnvloedt, wordt niet gedefinieerd. Een eenvoudige, verdedigbare keuze is een multiplicator op de reistijd, afgeleid van het verwachte verkeersniveau (bv.\ Low $=1{,}0$, Medium en High groter). De multiplicatoren zijn jouw aanname en moeten vermeld worden. Houd dit gescheiden van de Bayesiaanse congestiefactor 1,5 om dubbel tellen te vermijden, of leg uit hoe ze gecombineerd worden.
+
+\subsection{Zoeken (routes)}
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} Y Y@{}}
+\toprule
+Optie & Voordelen & Nadelen \\
+\midrule
+\textbf{A* (aanbevolen)} & Optimaal met een toelaatbare heuristiek. Gebruikt de $(x,y)$-co\"ordinaten van de knopen. Goede theorie om te verdedigen. & Heuristiek mag nooit overschatten: gebruik Euclidische afstand gedeeld door de maximale snelheid in de graaf (de afstand van een verbinding kan groter zijn dan de Euclidische afstand). \\
+Uniform Cost Search (UCS) & Altijd optimaal, eenvoudigst, geen heuristiek te bewijzen. & Verkent meer knopen (irrelevant op deze schaal). \\
+BFS / DFS & Eenvoudig. & Negeren kosten, dus ongeschikt. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent\textbf{Aanbeveling:} A* op de gerichte graaf met de risicogecorrigeerde kosten uit de twee probabilistische componenten. Verifieer in tests tegen UCS (beide moeten dezelfde kost geven). Voer de zoektocht uit vanaf elke kandidaat-locatie van een hulpverlener; zo wordt ook de omweg via H1 rond onzekere wegen gevonden.
+
+\subsection{Allocatie als Constraint Satisfaction Problem}
+\textbf{Variabelen:} voor elk bekend, nog niet toegewezen incident de hulpverlener die het behandelt (of ``onbehandeld'').\\
+\textbf{Harde voorwaarden:} de hulpverlener heeft de vereiste capaciteit; is vrij (of wordt vrij op tijd); er bestaat een route; aankomsttijd $\le$ deadline; \'e\'en hulpverlener per incident tegelijk.\\
+\textbf{Doelfunctie:} minimaliseer de (prioriteitsgewogen) responstijd, met responstijd $=$ aankomsttijd $-$ tijdstip van het incident.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} Y Y@{}}
+\toprule
+Optie & Voordelen & Nadelen \\
+\midrule
+Greedy (op prioriteit, dichtstbijzijnde haalbare) & Snel, triviaal uit te leggen, goede baseline. & Kortzichtig: kan de enige ambulance inzetten op een lage-prioriteitsopdracht en een kritieke missen. \\
+\textbf{CSP met backtracking / branch-and-bound over een batch (aanbevolen)} & Voorwaarden zijn expliciet. Gezamenlijke beslissingen voor gelijktijdige incidenten. Past bij de cursus. & Meer code. Regel nodig om de zoekruimte te begrenzen. \\
+CSP met \texttt{cp\_model} (OR-Tools) & Behandelt de optimalisatie rechtstreeks, behandeld in de cursus. & Externe bibliotheek; enkel kiezen als je het goed kan uitleggen. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent\textbf{Aanbeveling:} een hybride aanpak. Op elk beslissingstijdstip neem je de onbehandelde bekende incidenten en de vrije hulpverleners, bouw je de haalbare paren met de harde voorwaarden (met reistijden uit A*) en los je de toewijzing op met CSP-backtracking/branch-and-bound (of \texttt{cp\_model}), met kost $=$ prioriteitsgewicht $\times$ responstijd (Critical $>$ High $>$ Medium $>$ Low). Gebruik greedy als baseline voor vergelijking in het rapport.
+
+\medskip
+\noindent\textbf{Belangrijk:} het probleem is online. Incidenten op $t=50$ en $t=60$ zijn op $t=0$ onbekend. Plan niet de hele tijdlijn vooraf, maar herplan op elk gebeurtenistijdstip en registreer incidenten die niet bediend kunnen worden expliciet als onbehandeld.
+
+%--------------------------------------------------------------
+\section{Aanbevolen combinatie}\label{sec:combo}
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.8cm} Y Y@{}}
+\toprule
+Onderdeel & Hoofdkeuze & Baseline / extra om te vergelijken \\
+\midrule
+Wegstatus & Exacte Bayes-enumeratie & Beslissingen enkel op MAP \\
+Verkeer & HMM forward filtering + 1-staps voorspelling & Viterbi als analyse \\
+Routing & A* met risicogecorrigeerde kosten & UCS (als testorakel) \\
+Allocatie & Haalbaarheidsfilter + CSP per batch & Greedy dichtstbijzijnde hulpverlener \\
+Validatie & Onafhankelijke plan-checker (aparte module) & --- \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+%--------------------------------------------------------------
+\section{Aannames om te beslissen en te documenteren}
+\begin{itemize}
+  \item Tijdseenheid en formule voor reistijd (afstand/snelheid); de eenheid voor \texttt{statistics.txt}.
+  \item Waar een hulpverlener zich na een incident bevindt (aanname: blijft op de incidentlocatie) en wanneer hij weer vrij is (aankomst $+$ \texttt{time\_required}, of later als hij moet wachten).
+  \item Of hulpverleners terugkeren naar basis of ziekenhuis (enkel relevant voor medische incidenten als vervoer gemodelleerd wordt).
+  \item Of de toewijzingstijd in \texttt{plan.json} het vertrektijdstip is (het hoort het begin van de toewijzing te zijn).
+  \item Wat er met bezette hulpverleners gebeurt (R4 is 10 tijdseenheden bezet, dus pas daarna inzetbaar).
+  \item Hoe onbehandelde incidenten tellen: uitgesloten uit de gemiddelde responstijd maar geteld als gemiste deadline (of een alternatief, expliciet vermeld).
+  \item Weerbron voor wegen zonder meldingen.
+  \item Hoe verkeersniveau en wegstatus gecombineerd worden tot reistijd.
+\end{itemize}
+
+%--------------------------------------------------------------
+\section{Validatie en tests}
+\begin{itemize}
+  \item \textbf{Plan-validator:} elk pad volgt bestaande gerichte verbindingen; geen weg met beslissing ``blocked'' tenzij verantwoord; capaciteit komt overeen; geen overlappende opdrachten voor \'e\'en hulpverlener; starttijd $\ge$ tijdstip van het incident en beschikbaarheid van de hulpverlener; aankomst binnen de deadline voor ``deadline gehaald''.
+  \item \textbf{Unit tests:} Bayes-posterior tegen handberekening (tabel hierboven), HMM-forward op een klein met de hand oplosbaar geval, A*-kost gelijk aan UCS-kost, allocatie op een geval waar greedy faalt.
+  \item \textbf{Scenariotests:} voer Scenario 1 uit en rapporteer de statistieken, varieer daarna de risicostraf of drempel om te zien hoe plannen veranderen.
+  \item \textbf{Foutgevallen:} onbereikbaar incident, geen capabele hulpverlener, alle kandidaten bezet, onmogelijke deadline.
+\end{itemize}
+
+%--------------------------------------------------------------
+\section{Gebruik van LLM's (voor het rapport)}
+Houd vanaf het begin een log bij: de exacte eerste inhoudelijke prompt, wat je aanvaardde, aanpaste of verwierp, en waarom. Werk module per module (Bayes, HMM, zoeken, allocatie, validator, \texttt{run.py}), schrijf de tests zelf of laat ze door een tweede LLM nakijken, en zorg dat je elke regel kan uitleggen, want de verdediging telt voor 40\% van de punten.
+
+\end{document}

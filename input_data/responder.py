@@ -23,10 +23,12 @@ class Responder:
     time_until_available: float
 
     def __post_init__(self) -> None:
+        """Controleer beschikbaarheid en het bezit van minstens één vaardigheid."""
         if self.time_until_available < 0:
             raise ValueError("time_until_available cannot be negative")
         if not self.capabilities:
             raise ValueError(f"Responder {self.responder_id} has no capabilities")
 
     def can_handle(self, capability: str) -> bool:
+        """Geef aan of deze responder de gevraagde vaardigheid bezit."""
         return capability in self.capabilities

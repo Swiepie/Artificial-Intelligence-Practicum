@@ -20,9 +20,10 @@ from .traffic import TrafficLevel, TrafficObservation, TrafficProbabilities
 
 
 class ScenarioLoader:
-    """Loads one complete scenario directory into typed domain objects."""
+    """Lees één volledige scenariomap in als getypeerde domeinobjecten."""
 
     def load(self, scenario_directory: str | Path) -> ScenarioData:
+        """Lees de graaf, entiteiten, observaties en kansmatrices in."""
         directory = Path(scenario_directory)
         graph = self._load_graph(directory / "city_graph.json")
         return ScenarioData(
@@ -41,16 +42,19 @@ class ScenarioLoader:
 
     @staticmethod
     def _read_json(path: Path) -> dict[str, Any]:
+        """Lees één JSON-bestand en geef de inhoud als dictionary terug."""
         with path.open(encoding="utf-8") as file:
             return json.load(file)
 
     @staticmethod
     def _read_csv(path: Path) -> list[dict[str, str]]:
+        """Lees één CSV-bestand en geef de rijen als dictionaries terug."""
         with path.open(newline="", encoding="utf-8") as file:
             return list(csv.DictReader(file))
 
     @staticmethod
     def _load_graph(path: Path) -> CityGraph:
+        """Bouw de gerichte stadsgraaf uit het JSON-bestand."""
         raw = ScenarioLoader._read_json(path)
         nodes = {
             item["id"]: Node(
@@ -76,12 +80,14 @@ class ScenarioLoader:
 
     @staticmethod
     def _require_node(node_id: str, graph: CityGraph) -> str:
+        """Controleer dat een verwijzing naar een bestaande knoop wijst."""
         if node_id not in graph.nodes:
             raise ValueError(f"Unknown node in scenario data: {node_id}")
         return node_id
 
     @staticmethod
     def _load_responders(path: Path, graph: CityGraph) -> tuple[Responder, ...]:
+        """Lees responders en splits hun puntkomma-gescheiden vaardigheden."""
         return tuple(
             Responder(
                 responder_id=row["responder_id"],
@@ -102,6 +108,7 @@ class ScenarioLoader:
 
     @staticmethod
     def _load_incidents(path: Path, graph: CityGraph) -> tuple[Incident, ...]:
+        """Lees incidenten en zet tekstvelden om naar domeintypes."""
         return tuple(
             Incident(
                 incident_id=row["incident_id"],
@@ -117,6 +124,7 @@ class ScenarioLoader:
 
     @staticmethod
     def _load_road_reports(path: Path, graph: CityGraph) -> tuple[RoadReport, ...]:
+        """Lees meldingen en controleer dat elke gemelde weg bestaat."""
         reports = []
         for row in ScenarioLoader._read_csv(path):
             graph.get_road(row["from"], row["to"])
@@ -133,6 +141,7 @@ class ScenarioLoader:
 
     @staticmethod
     def _load_traffic(path: Path, graph: CityGraph) -> tuple[TrafficObservation, ...]:
+        """Lees historische verkeerswaarnemingen per gerichte weg."""
         observations = []
         for row in ScenarioLoader._read_csv(path):
             graph.get_road(row["from"], row["to"])
@@ -148,6 +157,7 @@ class ScenarioLoader:
 
     @staticmethod
     def _load_road_probabilities(path: Path) -> RoadProbabilities:
+        """Lees de Bayesiaanse kansmatrices voor wegtoestanden."""
         raw = ScenarioLoader._read_json(path)
         return RoadProbabilities(
             weather_prior={
@@ -178,6 +188,7 @@ class ScenarioLoader:
 
     @staticmethod
     def _load_traffic_probabilities(path: Path) -> TrafficProbabilities:
+        """Lees de begin-, overgangs- en emissiematrices van het HMM."""
         raw = ScenarioLoader._read_json(path)
         return TrafficProbabilities(
             initial={

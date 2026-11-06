@@ -25,4 +25,5 @@ class TrafficProbabilities:
     emission: Mapping[TrafficLevel, Mapping[TrafficLevel, float]]
 
     def __post_init__(self) -> None:
+        """Maak de beginverdeling alleen-lezen aan de buitenkant."""
         object.__setattr__(self, "initial", MappingProxyType(dict(self.initial)))
