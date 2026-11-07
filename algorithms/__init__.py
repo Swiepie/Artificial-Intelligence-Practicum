@@ -10,6 +10,7 @@ from .allocation import (
     ResponderState,
 )
 from .output import PlanWriter, StatisticsWriter
+from .independent_validator import IndependentPlanValidator, IndependentValidationIssue
 
 __all__ = [
     "Assignment",
@@ -23,6 +24,8 @@ __all__ = [
     "TrafficHMM",
     "PlanWriter",
     "StatisticsWriter",
+    "IndependentPlanValidator",
+    "IndependentValidationIssue",
     "astar",
     "uniform_cost_search",
 ]

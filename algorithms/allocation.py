@@ -21,6 +21,7 @@ class Assignment:
     start_time: float
     arrival_time: float
     completion_time: float
+    decided_at: float = 0.0
 
     @property
     def response_time(self) -> float:
@@ -91,6 +92,7 @@ class GreedyAllocator:
                         start_time=start,
                         arrival_time=arrival,
                         completion_time=arrival + incident.time_required,
+                        decided_at=now,
                     )
                 )
         return candidates

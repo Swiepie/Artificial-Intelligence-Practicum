@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from input_data.scenario_data import ScenarioData
 from .allocation import Assignment
+from .bayesian_road import BayesianRoadEstimator
 from .simulation import SimulationResult
 from .validator import PlanValidator, ValidationIssue
 
@@ -66,6 +67,58 @@ class StatisticsWriter:
             for assignment in assignments
             if assignment.arrival_time <= assignment.incident.deadline
         )
+        total_incidents = len(scenario.incidents)
+        percentage_met = (
+            100.0 * deadlines_met / total_incidents if total_incidents else 100.0
+        )
+        text = "\n".join(
+            [
+                "System statistics:",
+                f"* {handled} incidents handled",
+                f"* {responders_used} responders used",
+                f"* Average response time: {average_response:.1f} s",
+                f"* Deadlines met: {percentage_met:.1f}%",
+                "",
+                "Calculation notes:",
+                "* Response time is arrival time minus incident timestamp.",
+                "* Average response time includes handled incidents only.",
+                "* Unhandled incidents count as missed deadlines.",
+                "* Time units are simulation seconds.",
+            ]
+        )
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text, encoding="utf-8")
+
+    def write_from_plan(
+        self,
+        path: str | Path,
+        plan_path: str | Path,
+        scenario: ScenarioData,
+    ) -> None:
+        """Bereken statistieken opnieuw uit plan.json en scenariobestanden."""
+        with Path(plan_path).open(encoding="utf-8") as file:
+            plan = json.load(file)
+        incidents = {incident.incident_id: incident for incident in scenario.incidents}
+        beliefs = BayesianRoadEstimator(
+            scenario.road_probabilities, scenario.road_reports
+        ).estimate_all(scenario.graph.roads)
+        response_times: list[float] = []
+        deadlines_met = 0
+        for assignment in plan:
+            incident = incidents[assignment["incident_id"]]
+            travel_time = sum(
+                scenario.graph.get_road(first, second).normal_travel_time
+                * beliefs[(first, second)].expected_status_multiplier()
+                for first, second in zip(assignment["path"], assignment["path"][1:])
+            )
+            arrival = assignment["time"] + travel_time
+            response_times.append(arrival - incident.timestamp)
+            if arrival <= incident.deadline:
+                deadlines_met += 1
+        handled = len(plan)
+        responders_used = len({assignment["responder_id"] for assignment in plan})
+        average_response = sum(response_times) / handled if handled else 0.0
         total_incidents = len(scenario.incidents)
         percentage_met = (
             100.0 * deadlines_met / total_incidents if total_incidents else 100.0

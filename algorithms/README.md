@@ -297,4 +297,6 @@ code ook:
 
 De vergelijkingsmethoden zijn bedoeld voor tests, analyse en het verslag. De
 standaard simulator gebruikt de verwachte Bayesiaanse kosten, HMM-
-voorspelling, A* en CSP.
+voorspelling, A* en CSP. De HMM-beliefs blijven beschikbaar voor analyse, maar
+worden niet nogmaals als extra reistijdvermenigvuldiger toegepast; zo blijft de
+statusfactor binnen de grens van de opgave.

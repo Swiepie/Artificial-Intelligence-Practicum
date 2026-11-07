@@ -32,11 +32,17 @@ class RoadBelief:
         return self.probabilities[RoadStatus.BLOCKED]
 
     def expected_status_multiplier(self) -> float:
-        """Bereken de verwachte reistijdvermenigvuldiger van de weg."""
+        """Bereken de reistijd bij doorgang, conditioneel op niet blokkeren."""
+        passable = (
+            self.probabilities[RoadStatus.OPEN]
+            + self.probabilities[RoadStatus.CONGESTED]
+        )
+        if passable == 0:
+            return float("inf")
         return (
             self.probabilities[RoadStatus.OPEN]
             + 1.5 * self.probabilities[RoadStatus.CONGESTED]
-        )
+        ) / passable
 
 
 class BayesianRoadEstimator:

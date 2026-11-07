@@ -36,15 +36,20 @@ class RoadCostModel:
         traffic_multipliers: Mapping[TrafficLevel, float] | None = None,
         use_map_status: bool = False,
     ) -> None:
-        """Stel de gecombineerde weg-, risico- en verkeerskosten in."""
+        """Stel de gecombineerde weg-, risico- en verkeerskosten in.
+
+        Een weg met meer dan 50% blokkeerkans is voor routing onbruikbaar.
+        Verkeersobservaties worden niet extra gewogen; de opgave specificeert
+        alleen de statusfactoren 1.0 en 1.5.
+        """
         self.graph = graph
         self.road_beliefs = road_beliefs
         self.traffic_hmm = traffic_hmm
         self.blocked_penalty = blocked_penalty
         self.traffic_multipliers = traffic_multipliers or {
             TrafficLevel.LOW: 1.0,
-            TrafficLevel.MEDIUM: 1.15,
-            TrafficLevel.HIGH: 1.35,
+            TrafficLevel.MEDIUM: 1.0,
+            TrafficLevel.HIGH: 1.0,
         }
         self.use_map_status = use_map_status
 
@@ -60,6 +65,8 @@ class RoadCostModel:
             }[status]
             blocked = self.blocked_penalty if status is RoadStatus.BLOCKED else 0.0
         else:
+            if belief.blocked_probability > 0.5:
+                return float("inf")
             status_multiplier = belief.expected_status_multiplier()
             blocked = self.blocked_penalty * belief.blocked_probability
         traffic_multiplier = 1.0

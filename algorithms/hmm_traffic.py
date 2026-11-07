@@ -28,7 +28,9 @@ class TrafficHMM:
         """Bereken de huidige verkeersbelief met forward filtering."""
         belief = dict(self.probabilities.initial)
         observations = self.observations.get((road.from_node, road.to_node), ())
-        for observation in observations:
+        for index, observation in enumerate(observations):
+            if index:
+                belief = self._predict(belief)
             updated = {
                 state: belief[state]
                 * self.probabilities.emission[state][observation.traffic]
