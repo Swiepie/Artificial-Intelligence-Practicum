@@ -3,12 +3,15 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 
 def test_output_dir_optie(tmp_path):
     """Doel / Input: Scenario1 en tijdelijke map / Verwacht: beide bestanden."""
+    root = Path(__file__).parents[1]
     result = subprocess.run(
-        [sys.executable, "run.py", "Scenario1", "--output-dir", str(tmp_path)],
+        [sys.executable, str(root / "run.py"), "Scenario1", "--output-dir", str(tmp_path)],
+        cwd=root,
         capture_output=True,
         text=True,
     )

@@ -37,8 +37,10 @@ Tests draaien met `python -m pytest -q`.
   `weather_prior` wordt als brondata bewaard maar niet opnieuw gemengd.
 - De verwachte statusfactor is conditioneel op doorgang: Open is 1.0 en
   Congested 1.5. Wegen met `P(Blocked) > 0.5` zijn voor routing onbruikbaar.
-- Verkeersobservaties worden HMM-filtered, maar vermenigvuldigen de reistijd
-  niet extra; de opgave begrenst de statusfactor op maximaal 1.5.
+- De HMM voorspelt de kans op Medium/High verkeer als extra evidence voor
+  Congested. De verkeersfactoren blijven Low `1.0` en Medium/High `1.5`.
+  Bayes- en HMM-evidence worden gecombineerd met de sterkste vertragingfactor,
+  zodat dezelfde congestie niet dubbel wordt geteld.
 - Toewijzingen worden vastgelegd op het beslismoment (`decided_at`) en daarna
   niet herpland.
 - De CSP-skipkost is `gewicht × 10.000`; dat blijft hoger dan de onderzochte
@@ -69,7 +71,13 @@ wegtoestand en greedy-toewijzing zijn als vergelijkings- of basismethoden
 geïmplementeerd. Zie `input_data/README.md` en `AI.txt` voor de aannames,
 algoritmekeuzes en bekende beperkingen.
 
-De validator controleert gerichte routes, routebegin- en eindpunten,
-vaardigheden, beschikbaarheid, incidenttijdstippen, deadlines, dubbele
-toewijzingen en overlappende opdrachten. Onbehandelde incidenten worden niet
-meegenomen in de gemiddelde responstijd en tellen als gemiste deadlines.
+De onafhankelijke validator controleert gerichte routes, routebegin- en
+eindpunten, vaardigheden, beschikbaarheid, incidenttijdstippen, deadlines,
+dubbele toewijzingen en overlappende opdrachten zonder `Assignment`-objecten.
+Hij gebruikt wel dezelfde Bayesiaanse wegposterior en
+`expected_status_multiplier()` voor de verwachte reistijd; `*_optimistic`
+betekent dus “verwachte tijd”, niet “vrije reistijd”. De pessimistische
+controle vermenigvuldigt iedere weg met 1,5. Daardoor worden in Scenario1
+drie, in Scenario2 zes en in Scenario3 vier deadlines niet gehaald. Dat is
+een eerlijke beperking van het verwachte-reistijdmodel, geen validatorbug.
+De CLI voert deze controle na het schrijven uit en toont issues als waarschuwing.

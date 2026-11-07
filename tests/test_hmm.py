@@ -89,7 +89,7 @@ def test_filter_zonder_observaties():
 
 
 def test_predict_voegt_een_stap_toe():
-    """Doel / Input: predict(1) / Verwacht: filter × T en som 1 / Faalt nu? nee."""
+    """Voorspel één HMM-stap en controleer de overgangswaarde en normalisatie."""
     belief = _hmm([]).predict(_road(), steps=1)
     assert sum(belief.values()) == pytest.approx(1.0, abs=1e-9)
     assert belief[TrafficLevel.LOW] == pytest.approx(0.432, abs=1e-4)
@@ -132,3 +132,18 @@ def test_onbekende_weg_valt_terug_op_initial(scenario3):
     predicted = hmm.predict(road)
     assert predicted[TrafficLevel.LOW] == pytest.approx(0.53, abs=1e-4)
     assert sum(predicted.values()) == pytest.approx(1.0, abs=1e-9)
+
+
+def test_hmm_beinvloedt_wegkosten(scenario2):
+    """Medium/High verkeer verhoogt de routekost via de factoren 1,0 en 1,5."""
+    from algorithms.bayesian_road import BayesianRoadEstimator
+    from algorithms.routing import RoadCostModel
+
+    road = scenario2.graph.get_road("N7", "H2")
+    beliefs = BayesianRoadEstimator(
+        scenario2.road_probabilities, scenario2.road_reports
+    ).estimate_all(scenario2.graph.roads)
+    hmm = TrafficHMM(scenario2.traffic_probabilities, scenario2.traffic_observations)
+    without_hmm = RoadCostModel(scenario2.graph, beliefs).cost(road)
+    with_hmm = RoadCostModel(scenario2.graph, beliefs, hmm).cost(road)
+    assert with_hmm > without_hmm

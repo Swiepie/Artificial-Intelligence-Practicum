@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .bayesian_road import BayesianRoadEstimator
+from .constants import BLOCKED_PROBABILITY_THRESHOLD
 from input_data.scenario_loader import ScenarioLoader
 
 
@@ -117,7 +118,7 @@ class IndependentPlanValidator:
                         valid_path = False
                         continue
                     belief = beliefs[(first, second)]
-                    if belief.blocked_probability > 0.5:
+                    if belief.blocked_probability > BLOCKED_PROBABILITY_THRESHOLD:
                         issues.append(
                             IndependentValidationIssue(
                                 "blocked_road", f"{first}->{second}"

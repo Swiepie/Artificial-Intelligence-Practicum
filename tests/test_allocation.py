@@ -70,7 +70,27 @@ def test_csp_slaat_minder_over_dan_greedy():
     csp = CspAllocator().allocate(incidents, responders, route, 0)
     assert len(greedy) == 1
     assert {item.incident.incident_id for item in csp} == {"A", "B"}
-    assert {item.responder.responder_id for item in csp} == {"R1", "R2"}
+    assert {
+        item.incident.incident_id: item.responder.responder_id for item in csp
+    } == {"A": "R2", "B": "R1"}
+    greedy_cost = 1000 * greedy[0].response_time + 100 * 10000
+    csp_cost = 1000 * 12 + 100 * 10
+    assert greedy_cost == 1_010_000
+    assert csp_cost == 13_000
+
+
+def test_csp_skipkost_is_priority_weight():
+    """Een overgeslagen Critical kost 10.000.000 en High 1.000.000."""
+    assert 1000 * 10000 == 10_000_000
+    assert 100 * 10000 == 1_000_000
+
+
+def test_csp_skipkost_maakt_haalbare_critical_beter():
+    """Controleer dat een haalbare Critical wordt gekozen in plaats van overgeslagen."""
+    responder = ResponderState(_responder("R1", "base"), "base", 0)
+    incident = _incident("A", IncidentPriority.CRITICAL, "target", deadline=7000)
+    route = lambda start, goal: RouteResult((start, goal), 6000, True, 6000)
+    assert CspAllocator().allocate((incident,), (responder,), route, 0)
 
 
 def test_deadline_hard_en_busy_responder():

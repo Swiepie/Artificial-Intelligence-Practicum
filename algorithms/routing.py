@@ -8,6 +8,7 @@ from input_data.city_graph import CityGraph
 from input_data.road import Road, RoadStatus
 from input_data.traffic import TrafficLevel
 from .bayesian_road import RoadBelief
+from .constants import BLOCKED_PROBABILITY_THRESHOLD
 from .hmm_traffic import TrafficHMM
 
 
@@ -38,9 +39,8 @@ class RoadCostModel:
     ) -> None:
         """Stel de gecombineerde weg-, risico- en verkeerskosten in.
 
-        Een weg met meer dan 50% blokkeerkans is voor routing onbruikbaar.
-        Verkeersobservaties worden niet extra gewogen; de opgave specificeert
-        alleen de statusfactoren 1.0 en 1.5.
+        Een weg met meer dan de gedeelde blokkeerdrempel is voor routing
+        onbruikbaar. Medium en High verkeer hebben factor 1.5.
         """
         self.graph = graph
         self.road_beliefs = road_beliefs
@@ -48,14 +48,14 @@ class RoadCostModel:
         self.blocked_penalty = blocked_penalty
         self.traffic_multipliers = traffic_multipliers or {
             TrafficLevel.LOW: 1.0,
-            TrafficLevel.MEDIUM: 1.0,
-            TrafficLevel.HIGH: 1.0,
+            TrafficLevel.MEDIUM: 1.5,
+            TrafficLevel.HIGH: 1.5,
         }
         self.use_map_status = use_map_status
 
     def cost(self, road: Road) -> float:
         """Bereken de routezoekkost voor één weg."""
-        belief = self.road_beliefs[(road.from_node, road.to_node)]
+        belief = self._effective_belief(road)
         if self.use_map_status:
             status = belief.most_likely_status
             status_multiplier = {
@@ -65,7 +65,7 @@ class RoadCostModel:
             }[status]
             blocked = self.blocked_penalty if status is RoadStatus.BLOCKED else 0.0
         else:
-            if belief.blocked_probability > 0.5:
+            if belief.blocked_probability > BLOCKED_PROBABILITY_THRESHOLD:
                 return float("inf")
             status_multiplier = belief.expected_status_multiplier()
             blocked = self.blocked_penalty * belief.blocked_probability
@@ -76,11 +76,14 @@ class RoadCostModel:
                 probability * self.traffic_multipliers[level]
                 for level, probability in traffic.items()
             )
-        return road.normal_travel_time * status_multiplier * traffic_multiplier + blocked
+        # Beide bronnen beschrijven vertraging; neem de sterkste evidence om
+        # dezelfde congestie niet tweemaal te vermenigvuldigen.
+        delay_multiplier = max(status_multiplier, traffic_multiplier)
+        return road.normal_travel_time * delay_multiplier + blocked
 
     def travel_time(self, road: Road) -> float:
         """Bereken de verwachte fysieke reistijd zonder blokkeerboete."""
-        belief = self.road_beliefs[(road.from_node, road.to_node)]
+        belief = self._effective_belief(road)
         if self.use_map_status:
             status = belief.most_likely_status
             if status is RoadStatus.BLOCKED:
@@ -95,7 +98,17 @@ class RoadCostModel:
                 probability * self.traffic_multipliers[level]
                 for level, probability in traffic.items()
             )
-        return road.normal_travel_time * status_multiplier * traffic_multiplier
+        delay_multiplier = max(status_multiplier, traffic_multiplier)
+        return road.normal_travel_time * delay_multiplier
+
+    def _effective_belief(self, road: Road) -> RoadBelief:
+        """Combineer Bayes met HMM-evidence zonder de blocked-status te verbergen."""
+        belief = self.road_beliefs[(road.from_node, road.to_node)]
+        if self.traffic_hmm is None:
+            return belief
+        traffic = self.traffic_hmm.predict(road)
+        pressure = traffic[TrafficLevel.MEDIUM] + traffic[TrafficLevel.HIGH]
+        return belief.with_traffic_evidence(pressure)
 
 
 def _search(

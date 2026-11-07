@@ -44,6 +44,25 @@ class RoadBelief:
             + 1.5 * self.probabilities[RoadStatus.CONGESTED]
         ) / passable
 
+    def with_traffic_evidence(
+        self, medium_or_high_probability: float
+    ) -> "RoadBelief":
+        """Verwerk druk verkeer als extra, zachte evidence voor congestie."""
+        pressure = max(0.0, min(1.0, medium_or_high_probability))
+        scores = {
+            RoadStatus.OPEN: self.probabilities[RoadStatus.OPEN] * (1.0 - 0.5 * pressure),
+            RoadStatus.CONGESTED: self.probabilities[RoadStatus.CONGESTED]
+            * (1.0 + 0.5 * pressure),
+            RoadStatus.BLOCKED: self.probabilities[RoadStatus.BLOCKED],
+        }
+        total = sum(scores.values())
+        return RoadBelief(
+            self.from_node,
+            self.to_node,
+            {status: value / total for status, value in scores.items()},
+            self.weather,
+        )
+
 
 class BayesianRoadEstimator:
     """Bereken exact P(status | weer, onafhankelijke meldingen)."""

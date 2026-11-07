@@ -5,6 +5,7 @@ from pathlib import Path
 
 from algorithms.output import PlanWriter, StatisticsWriter
 from algorithms.simulation import Simulator
+from algorithms.independent_validator import IndependentPlanValidator
 from input_data.scenario_loader import ScenarioLoader
 
 
@@ -28,9 +29,9 @@ def main() -> None:
     output_directory = args.output_dir or scenario_directory
     plan_path = output_directory / "plan.json"
     PlanWriter().write(plan_path, result, scenario)
-    StatisticsWriter().write_from_plan(
-        output_directory / "statistics.txt", plan_path, scenario
-    )
+    statistics_path = output_directory / "statistics.txt"
+    StatisticsWriter().write_from_plan(statistics_path, plan_path, scenario)
+    issues = IndependentPlanValidator().validate(plan_path, scenario_directory)
     print(
         f"Loaded {len(scenario.graph.nodes)} nodes, "
         f"{len(scenario.graph.roads)} roads, "
@@ -41,6 +42,11 @@ def main() -> None:
         f"Assigned {len(result.assignments)} incidents, "
         f"left {len(result.unassigned_incidents)} unassigned."
     )
+    if issues:
+        print(
+            "Warning: independent validation found "
+            + "; ".join(f"{issue.code}: {issue.message}" for issue in issues)
+        )
 
 
 if __name__ == "__main__":

@@ -18,7 +18,14 @@ class SimulationResult:
 class Simulator:
     """Plan opnieuw zodra nieuwe incidenten bekend worden."""
 
-    def run(self, scenario: ScenarioData) -> SimulationResult:
+    def run(
+        self,
+        scenario: ScenarioData,
+        *,
+        traffic_enabled: bool = True,
+        blocked_penalty: float = 10_000.0,
+        use_map_status: bool = False,
+    ) -> SimulationResult:
         """Voer de volledige tijdlijn uit zonder toekomstige incidenten te zien."""
         road_estimator = BayesianRoadEstimator(
             scenario.road_probabilities, scenario.road_reports
@@ -27,7 +34,13 @@ class Simulator:
         traffic_hmm = TrafficHMM(
             scenario.traffic_probabilities, scenario.traffic_observations
         )
-        cost_model = RoadCostModel(scenario.graph, beliefs, traffic_hmm)
+        cost_model = RoadCostModel(
+            scenario.graph,
+            beliefs,
+            traffic_hmm if traffic_enabled else None,
+            blocked_penalty=blocked_penalty,
+            use_map_status=use_map_status,
+        )
         states = {
             responder.responder_id: ResponderState(
                 responder=responder,
