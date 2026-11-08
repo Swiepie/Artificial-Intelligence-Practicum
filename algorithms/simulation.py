@@ -4,9 +4,7 @@ from typing import Iterable
 from input_data.incident import Incident
 from input_data.scenario_data import ScenarioData
 from .allocation import Assignment, CspAllocator, ResponderState
-from .bayesian_road import BayesianRoadEstimator
-from .hmm_traffic import TrafficHMM
-from .routing import RoadCostModel, astar
+from .routing import astar, build_road_cost_model
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,17 +25,9 @@ class Simulator:
         use_map_status: bool = False,
     ) -> SimulationResult:
         """Voer de volledige tijdlijn uit zonder toekomstige incidenten te zien."""
-        road_estimator = BayesianRoadEstimator(
-            scenario.road_probabilities, scenario.road_reports
-        )
-        beliefs = road_estimator.estimate_all(scenario.graph.roads)
-        traffic_hmm = TrafficHMM(
-            scenario.traffic_probabilities, scenario.traffic_observations
-        )
-        cost_model = RoadCostModel(
-            scenario.graph,
-            beliefs,
-            traffic_hmm if traffic_enabled else None,
+        cost_model = build_road_cost_model(
+            scenario,
+            traffic_enabled=traffic_enabled,
             blocked_penalty=blocked_penalty,
             use_map_status=use_map_status,
         )

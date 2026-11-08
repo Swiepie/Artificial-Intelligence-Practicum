@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .bayesian_road import BayesianRoadEstimator
-from .constants import BLOCKED_PROBABILITY_THRESHOLD
+from .routing import build_road_cost_model
 from input_data.scenario_loader import ScenarioLoader
 
 
@@ -34,9 +33,7 @@ class IndependentPlanValidator:
 
         responders = {item.responder_id: item for item in scenario.responders}
         incidents = {item.incident_id: item for item in scenario.incidents}
-        beliefs = BayesianRoadEstimator(
-            scenario.road_probabilities, scenario.road_reports
-        ).estimate_all(scenario.graph.roads)
+        cost_model = build_road_cost_model(scenario)
         issues: list[IndependentValidationIssue] = []
         seen_incidents: set[str] = set()
         entries: dict[str, list[tuple[dict[str, Any], Any, Any, list[Any], float]]] = {}
@@ -117,15 +114,14 @@ class IndependentPlanValidator:
                         )
                         valid_path = False
                         continue
-                    belief = beliefs[(first, second)]
-                    if belief.blocked_probability > BLOCKED_PROBABILITY_THRESHOLD:
+                    if cost_model.cost(road) == float("inf"):
                         issues.append(
                             IndependentValidationIssue(
                                 "blocked_road", f"{first}->{second}"
                             )
                         )
                     normal_time += (
-                        road.normal_travel_time * belief.expected_status_multiplier()
+                        cost_model.travel_time(road)
                     )
                     pessimistic_time += road.normal_travel_time * 1.5
 

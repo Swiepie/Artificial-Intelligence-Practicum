@@ -23,14 +23,17 @@ def test_statistieken_herberekend_uit_plan(tmp_path, scenario1):
     result = Simulator().run(scenario)
     plan_path = tmp_path / "plan.json"
     stats_path = tmp_path / "statistics.txt"
+    direct_stats_path = tmp_path / "direct-statistics.txt"
     from algorithms.output import PlanWriter
 
     PlanWriter().write(plan_path, result, scenario)
     StatisticsWriter().write_from_plan(stats_path, plan_path, scenario)
+    StatisticsWriter().write(direct_stats_path, result, scenario)
     text = stats_path.read_text()
     assert f"* {len(result.assignments)} incidents handled" in text
     assert "* Average response time: " in text
     assert "* Deadlines met: " in text
+    assert text == direct_stats_path.read_text()
 
 
 def test_statistieken_microscenario(scenario1, tmp_path):

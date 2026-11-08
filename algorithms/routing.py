@@ -6,8 +6,9 @@ from typing import Callable, Mapping
 
 from input_data.city_graph import CityGraph
 from input_data.road import Road, RoadStatus
+from input_data.scenario_data import ScenarioData
 from input_data.traffic import TrafficLevel
-from .bayesian_road import RoadBelief
+from .bayesian_road import BayesianRoadEstimator, RoadBelief
 from .constants import BLOCKED_PROBABILITY_THRESHOLD
 from .hmm_traffic import TrafficHMM
 
@@ -109,6 +110,29 @@ class RoadCostModel:
         traffic = self.traffic_hmm.predict(road)
         pressure = traffic[TrafficLevel.MEDIUM] + traffic[TrafficLevel.HIGH]
         return belief.with_traffic_evidence(pressure)
+
+
+def build_road_cost_model(
+    scenario: ScenarioData,
+    *,
+    traffic_enabled: bool = True,
+    blocked_penalty: float = 10_000.0,
+    use_map_status: bool = False,
+) -> RoadCostModel:
+    """Bouw het gedeelde wegkostenmodel voor een scenario."""
+    beliefs = BayesianRoadEstimator(
+        scenario.road_probabilities, scenario.road_reports
+    ).estimate_all(scenario.graph.roads)
+    traffic_hmm = TrafficHMM(
+        scenario.traffic_probabilities, scenario.traffic_observations
+    )
+    return RoadCostModel(
+        scenario.graph,
+        beliefs,
+        traffic_hmm if traffic_enabled else None,
+        blocked_penalty=blocked_penalty,
+        use_map_status=use_map_status,
+    )
 
 
 def _search(

@@ -177,13 +177,13 @@ wel routes en toewijzingen kan veranderen. De gedeelde
 validatie wanneer een weg onbruikbaar is.
 
 De onafhankelijke validator is onafhankelijk van \texttt{Assignment}-objecten,
-maar niet van de probabilistische aannames: hij herberekent de Bayesiaanse
-posterior en gebruikt \texttt{expected\_status\_multiplier()}. Een issue met
-suffix \texttt{\_optimistic} betekent daarom een overtreding onder de
-verwachte reistijd, niet onder vrije reistijd. De aparte pessimistische
-controle gebruikt $1{,}5\times$ per weg. Daarmee worden in S1 drie deadlines
-(I1, I3, I4), in S2 zes en in S3 vier deadlines gemist. Dit is een expliciete
-beperking van plannen op verwachte reistijd.
+maar niet van de probabilistische aannames: hij herberekent hetzelfde
+gecombineerde Bayes/HMM-kostenmodel als de planner. Een issue met suffix
+\texttt{\_optimistic} betekent daarom een overtreding onder de verwachte
+reistijd, niet onder vrije reistijd. De aparte pessimistische controle gebruikt
+$1{,}5\times$ per weg. In de standaardconfiguratie worden daarmee in S1 twee,
+in S2 twee en in S3 drie deadlines als pessimistisch gemist. Dit is een
+expliciete beperking van plannen op verwachte reistijd.
 
 \begin{center}
 \small
@@ -257,12 +257,13 @@ met $t_e$ de basisreistijd en $\lambda$ een risicostraf (of sluit verbindingen b
 Optie & Voordelen & Nadelen \\
 \midrule
 \textbf{Forward algoritme (filtering) + voorspelling (aanbevolen)} & Geeft $P(\text{toestand}_t\mid \text{obs}_{1:t})$, dus respecteert ``geen kennis van de toekomst''. Voorspel vooruit met de transitiematrix voor het verkeer tijdens de rit. & Vraagt een duidelijke afbeelding van observatie-index naar simulatietijd. \\
-Viterbi (meest waarschijnlijke reeks) & Klassiek, goed om te tonen. & Geeft een volledige verleden reeks, geen huidige belief; past minder bij de online setting. \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-\noindent\textbf{Aanbeveling:} forward filtering per weg, daarna \'e\'en-staps voorspelling. Gebruik Viterbi enkel als extra analyse of sanity check.
+\noindent\textbf{Aanbeveling:} gebruik uitsluitend forward filtering per weg en daarna
+\'e\'en-staps voorspelling. Een offline toestandsreconstructie hoort niet in dit
+project, omdat de simulatie online met de huidige belief werkt.
 
 \medskip
 \noindent\textbf{Open ontwerpvraag om te documenteren:} hoe het verkeersniveau de reistijd beïnvloedt, wordt niet gedefinieerd. Een eenvoudige, verdedigbare keuze is een multiplicator op de reistijd, afgeleid van het verwachte verkeersniveau (bv.\ Low $=1{,}0$, Medium en High groter). De multiplicatoren zijn jouw aanname en moeten vermeld worden. Houd dit gescheiden van de Bayesiaanse congestiefactor 1,5 om dubbel tellen te vermijden, of leg uit hoe ze gecombineerd worden.
@@ -314,7 +315,7 @@ CSP met \texttt{cp\_model} (OR-Tools) & Behandelt de optimalisatie rechtstreeks,
 Onderdeel & Hoofdkeuze & Baseline / extra om te vergelijken \\
 \midrule
 Wegstatus & Exacte Bayes-enumeratie & Beslissingen enkel op MAP \\
-Verkeer & HMM forward filtering + 1-staps voorspelling & Viterbi als analyse \\
+Verkeer & HMM forward filtering + 1-staps voorspelling & --- \\
 Routing & A* met risicogecorrigeerde kosten & UCS (als testorakel) \\
 Allocatie & Haalbaarheidsfilter + CSP per batch & Greedy dichtstbijzijnde hulpverlener \\
 Validatie & Onafhankelijke plan-checker (aparte module) & --- \\

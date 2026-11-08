@@ -66,18 +66,19 @@ niet nodig.
 
 Het systeem combineert exacte Bayesiaanse inferentie van wegtoestanden, HMM-
 filtering van verkeer, A*-routing, CSP-toewijzing en een onafhankelijke
-planningsvalidator. Uniform Cost Search, Viterbi, de meest waarschijnlijke
-wegtoestand en greedy-toewijzing zijn als vergelijkings- of basismethoden
-geïmplementeerd. Zie `input_data/README.md` en `AI.txt` voor de aannames,
+planningsvalidator. Uniform Cost Search, de meest waarschijnlijke wegtoestand en greedy-toewijzing
+zijn alleen als vergelijkings- of basismethoden geïmplementeerd. Niet-gekozen
+offline reconstructie- en continue-toestandsfilters maken geen deel uit van het
+project. Zie `input_data/README.md` en `AI.txt` voor de aannames,
 algoritmekeuzes en bekende beperkingen.
 
-De onafhankelijke validator controleert gerichte routes, routebegin- en
+De HMM is onderdeel van de standaardconfiguratie en wordt gebruikt voor zowel
+planning als statistieken en onafhankelijke validatie. De onafhankelijke validator
+controleert gerichte routes, routebegin- en
 eindpunten, vaardigheden, beschikbaarheid, incidenttijdstippen, deadlines,
 dubbele toewijzingen en overlappende opdrachten zonder `Assignment`-objecten.
-Hij gebruikt wel dezelfde Bayesiaanse wegposterior en
-`expected_status_multiplier()` voor de verwachte reistijd; `*_optimistic`
-betekent dus “verwachte tijd”, niet “vrije reistijd”. De pessimistische
-controle vermenigvuldigt iedere weg met 1,5. Daardoor worden in Scenario1
-drie, in Scenario2 zes en in Scenario3 vier deadlines niet gehaald. Dat is
-een eerlijke beperking van het verwachte-reistijdmodel, geen validatorbug.
+Hij gebruikt hetzelfde gecombineerde Bayes/HMM-wegkostenmodel als de planner;
+`*_optimistic` betekent dus “verwachte tijd”, niet “vrije reistijd”. De
+pessimistische controle vermenigvuldigt iedere weg met 1,5. Dat is een eerlijke
+beperking van het verwachte-reistijdmodel, geen validatorbug.
 De CLI voert deze controle na het schrijven uit en toont issues als waarschuwing.

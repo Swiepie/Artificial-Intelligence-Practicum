@@ -102,14 +102,13 @@ observaties van deze verborgen toestand.
   - `filter(road)` berekent de huidige belief met forward filtering.
   - `predict(road, steps)` voorspelt het verkeer vooruit met de
     overgangsmatrix.
-  - `viterbi(road)` berekent de meest waarschijnlijke historische
-    toestandsreeks.
 
 ### Gebruik
 
 `RoadCostModel` gebruikt `predict(road)` om een verwachte
-verkeersvermenigvuldiger te berekenen. `viterbi()` is beschikbaar als
-vergelijkings- en analysemethode, maar bepaalt niet de standaardroute.
+verkeersvermenigvuldiger te berekenen. De HMM wordt uitsluitend gebruikt voor
+online belief filtering en voorspelling; een offline toestandsreconstructie
+wordt niet gebruikt.
 
 ### Aanname
 
@@ -291,7 +290,7 @@ code ook:
 | Hoofdonderdeel | Hoofdmethode | Vergelijkingsmethode |
 |---|---|---|
 | Wegtoestand | Verwachte Bayesiaanse kost | MAP-wegtoestand via `use_map_status` |
-| Verkeer | Forward filtering en voorspelling | Viterbi |
+| Verkeer | Forward filtering en voorspelling | Geen offline toestandsreconstructie |
 | Routezoeken | A* | Uniform Cost Search |
 | Toewijzing | CSP | Greedy |
 

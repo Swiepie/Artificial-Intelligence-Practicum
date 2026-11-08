@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from input_data.scenario_data import ScenarioData
 from .allocation import Assignment
-from .bayesian_road import BayesianRoadEstimator
+from .routing import build_road_cost_model
 from .simulation import SimulationResult
 from .validator import PlanValidator, ValidationIssue
 
@@ -100,16 +100,13 @@ class StatisticsWriter:
         with Path(plan_path).open(encoding="utf-8") as file:
             plan = json.load(file)
         incidents = {incident.incident_id: incident for incident in scenario.incidents}
-        beliefs = BayesianRoadEstimator(
-            scenario.road_probabilities, scenario.road_reports
-        ).estimate_all(scenario.graph.roads)
+        cost_model = build_road_cost_model(scenario)
         response_times: list[float] = []
         deadlines_met = 0
         for assignment in plan:
             incident = incidents[assignment["incident_id"]]
             travel_time = sum(
-                scenario.graph.get_road(first, second).normal_travel_time
-                * beliefs[(first, second)].expected_status_multiplier()
+                cost_model.travel_time(scenario.graph.get_road(first, second))
                 for first, second in zip(assignment["path"], assignment["path"][1:])
             )
             arrival = assignment["time"] + travel_time

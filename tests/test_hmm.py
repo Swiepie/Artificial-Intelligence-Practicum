@@ -95,17 +95,6 @@ def test_predict_voegt_een_stap_toe():
     assert belief[TrafficLevel.LOW] == pytest.approx(0.432, abs=1e-4)
 
 
-def test_viterbi_lengte_en_low_reeks():
-    """Doel / Input: drie Low-observaties / Verwacht: lengte 3 en Low-reeks / Faalt nu? nee."""
-    observations = [
-        TrafficObservation(index, "A", "B", TrafficLevel.LOW)
-        for index in range(1, 4)
-    ]
-    path = _hmm(observations).viterbi(_road())
-    assert len(path) == 3
-    assert path == (TrafficLevel.LOW,) * 3
-
-
 def test_hmm_normaliseert_alle_scenario_wegen(scenario1, scenario2, scenario3):
     """Doel / Input: alle S1-S3-wegen / Verwacht: belief-som 1 / Faalt nu? nee."""
     for scenario in (scenario1, scenario2, scenario3):
