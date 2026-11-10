@@ -22,7 +22,6 @@ Elke scenariomap bevat een volledige invoerdataset.
   (`Open`, `Congested`, `Blocked`). Beschrijf en verantwoord hoe verkeer de
   planning beïnvloedt; er zijn geen vaste verkeersvermenigvuldigers opgelegd.
 
-Documenteer en verdedig alle aanvullende aannames.
 
 ## Codestructuur
 
@@ -39,4 +38,3 @@ modules:
 - `scenario_loader.py` leest alle CSV- en JSON-bestanden en controleert
   verwijzingen naar knopen en wegen.
 
-De AI-implementaties staan in de aparte map `algorithms/` in de hoofdmap.
