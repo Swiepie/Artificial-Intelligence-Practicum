@@ -1,0 +1,11 @@
+System statistics:
+* 7 incidents handled
+* 5 responders used
+* Average response time: 29.5 s
+* Deadlines met: 58.3%
+
+Calculation notes:
+* Response time is arrival time minus incident timestamp.
+* Average response time includes handled incidents only.
+* Unhandled incidents count as missed deadlines.
+* Time units are simulation seconds.

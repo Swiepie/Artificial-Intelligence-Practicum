@@ -1,0 +1,30 @@
+[
+  {
+    "responder_id": "R3",
+    "incident_id": "I3",
+    "path": [
+      "N2",
+      "H1",
+      "N4",
+      "N3"
+    ],
+    "time": 0.0
+  },
+  {
+    "responder_id": "R2",
+    "incident_id": "I4",
+    "path": [
+      "H1",
+      "N2"
+    ],
+    "time": 0.0
+  },
+  {
+    "responder_id": "R1",
+    "incident_id": "I5",
+    "path": [
+      "N1"
+    ],
+    "time": 50.0
+  }
+]
